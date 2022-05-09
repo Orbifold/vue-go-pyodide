@@ -1,0 +1,46 @@
+{
+  "name": "vue-go-pyodide",
+  "description": "Use of Pyodide and NetworkX to create graphs and visualize them using Go.js. All within the browser.",
+  "author": "Francois Vanderseypen <info@orbifold.net>",
+  "homepage": "",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "start": "vue-cli-service serve",
+    "build": "vue-cli-service build"
+
+  },
+  "dependencies": {
+    "vue": "^2.6.11",
+    "vue-class-component": "^7.2.3",
+    "vue-property-decorator": "^9.1.2",
+    "vuetify": "^2.6.0",
+    "vuex": "^3.4.0",
+    "gojs": "^2.2.9",
+    "lodash": "^4.17.21",
+    "prismjs": "^1.27.0"
+  },
+  "devDependencies": {
+    "@types/jest": "^24.0.19",
+    "@vue/cli-plugin-typescript": "~4.5.15",
+    "@vue/cli-plugin-unit-jest": "~4.5.15",
+    "@vue/cli-plugin-vuex": "~4.5.15",
+    "@vue/cli-service": "~4.5.15",
+    "@vue/test-utils": "^1.0.3",
+    "sass": "~1.32.0",
+    "sass-loader": "^10.0.0",
+    "typescript": "~4.1.5",
+    "vue-cli-plugin-vuetify": "~2.4.8",
+    "vue-template-compiler": "^2.6.11",
+    "vuetify-loader": "^1.7.0",
+    "vue-prism-editor": "^1.3.0"
+  },
+  "browserslist": [
+    "> 1%",
+    "last 2 versions",
+    "not dead"
+  ],
+  "jest": {
+    "preset": "@vue/cli-plugin-unit-jest/presets/typescript"
+  }
+}
