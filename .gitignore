@@ -2,6 +2,7 @@
 node_modules
 /dist
 /public/pyodide
+/public/pyodide-extra
 
 # local env files
 .env.local
