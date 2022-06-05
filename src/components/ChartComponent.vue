@@ -1,6 +1,6 @@
 <template>
-  <div class="vis" v-if="data && options && options.chart && options.chart.type">
-    <Chart ref="chart" :options="options" :series="data"></Chart>
+  <div class="vis" v-if="series && options && options.chart && options.chart.type">
+    <Chart ref="chart" :options="options" :series="series"></Chart>
     <!--    <div style="background-color: #929292; border-radius: 5px;"></div>-->
   </div>
 </template>
@@ -18,7 +18,7 @@ import {identity} from "lodash";
   components: {}
 })
 export default class ChartComponent extends Vue {
-  @Prop() data: any;
+  @Prop() series: any;
   @Prop() options: any;
   chartData: any = [];
   chartOptions: any = null;
@@ -32,9 +32,9 @@ export default class ChartComponent extends Vue {
     this.onNewOptions();
   }
 
-  @Watch("data")
+  @Watch("series")
   onNewData() {
-    this.chartData = this.data || [];
+    this.chartData = this.series || [];
   }
 
   @Watch("options")

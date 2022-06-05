@@ -1,9 +1,6 @@
 <template>
   <div>
-
-    <PrismEditor class="editor" v-model="snippet" :highlight="highlighter" line-numbers @keydown.ctrl.enter="execute($event)"></PrismEditor>
-
-
+    <PrismEditor class="editor" v-model="snippet" :highlight="highlighter" line-numbers @keydown.ctrl.enter="$event.preventDefault(); execute(null)"></PrismEditor>
   </div>
 </template>
 
@@ -19,17 +16,32 @@ import "prismjs/components/prism-python.min";
 import "prismjs/themes/prism-coy.min.css";
 import VueBase from "@/components/VueBase";
 
-
-
+/*
+* Errors and log:
+* they are committed to the store.
+* Events:
+* - python-ready
+* - output-changed
+* */
 @Component({components: {DiagramView, PrismEditor}})
 export default class PythonEditorComponent extends VueBase {
+  /**
+   * Sets the code of the editor.
+   * @type {string}
+   */
   @Prop() code: string;
-
-  data: any = null;
+  /**
+   * The editor's content.
+   */
   snippet: string = null;
-  busyMessage: string = null;
-  isBusy: boolean = false;
+  /**
+   * The pyodide space wherein Python is executed.
+   */
   pyodide: any;
+  /**
+   * The context given to Python and which the user can use to get/set data.
+   * @type {any}
+   */
   ctx: any;
 
   @Watch("code")
@@ -63,28 +75,45 @@ export default class PythonEditorComponent extends VueBase {
       await this.pyodide.loadPackage("networkx", (msg) => {
         this.setBusy(msg);
       }, (e) => this.appendToError(e));
+      // clear the log and error output
       this.resetOutput();
+      this.$emit("python-ready");
     } catch (e: any) {
       this.appendToError(e.message);
     }
   }
 
 
-  execute(event = null) {
-    if (event) {
-      event.preventDefault();
+  /**
+   * Executes the given code or, if none given, the current editor content.
+   * @param code
+   * @returns {null | {nodes: any, edges: any}}
+   */
+  execute(code = null) {
+    if (_.isNil(code)) {
+      code = this.snippet;
+    } else {
+      // set the editor's content to the given code
+      this.snippet = code;
+    }
+    if (_.isNil(code)) {
+      return null;
+    }
+    if (code.toString().trim().length === 0) {
+      return null;
     }
     this.setBusy("Executing Python");
+    console.log("Executing Python");
     this.resetOutput();
+    // this.ctx = this.getPythonContext();
     try {
-      const out = this.pyodide.runPython(this.snippet);
+      const out = this.pyodide.runPython(code);
       // const x = this.pyodide.globals.get("x");
       // if (x) {
       //   console.log("x: ", x);
       // }
-
+      let graph = null;
       if (this.ctx.graph) {
-        //@ts-ignore
         let nodes = JSON.parse(this.ctx.graph.get("nodes").toString().replaceAll("'", "\""));
         //@ts-ignore
         let edges = JSON.parse(this.ctx.graph.get("edges").toString().replaceAll("'", "\""));
@@ -96,16 +125,29 @@ export default class PythonEditorComponent extends VueBase {
           e.name = Math.random() > 0.5 ? "A" : null;
           return e;
         });
-        this.setGraphModel({nodes, edges});
+        graph = {nodes, edges};
       }
-
+      // todo: need a recursive serialization
+      const serializedContext = {
+        chart: {
+          options: this.ctx.chart.options,
+          series: this.ctx.chart.series.toJs().map(u => Object.fromEntries(u))
+        },
+        graph
+      };
+      this.$emit("output-changed", serializedContext);
+      return serializedContext;
     } catch (e) {
       this.appendToError(e);
+    } finally {
+      this.setBusy(null);
     }
-    this.setBusy(null);
 
   }
 
+  /**
+   * Code coloring for the given code.
+   */
   highlighter(code) {
     // const lang = "js";
     // if (prism.languages[lang]) {
@@ -119,28 +161,55 @@ export default class PythonEditorComponent extends VueBase {
 
   async mounted() {
     this.setBusy("Downloading modules");
+    // give moment to show the spinner
     await new Promise(r => setTimeout(r, 500));
-
-
-    // await new Promise(r => setTimeout(r, 2000));
+    // init Python
     await this.initializePyodide();
-
-    // await this.pyodide.loadPackage("graphminer", (e) =>{this.busyMessage = e}, (e) => console.error(e));
-    this.ctx = {
-      graph: {nodes: [], edges: []},
-      aha: () => {
-        return {a: 1, b: 2};
-      }
-    };
+    // set the Python context
+    this.ctx = this.getPythonContext();
+    // give it to Python
     this.pyodide.registerJsModule("ctx", this.ctx);
     // predefined functions
-    this.pyodide.runPython(`
-    from networkx.readwrite import json_graph
-    def serialize_graph(g):
-       return json_graph.node_link_data(g,  {'link': 'edges', 'source': 'sourceId', 'target': 'targetId'})
-    `);
+    const predefined = `from networkx.readwrite import json_graph
+
+def serialize_graph(g):
+   return json_graph.node_link_data(g,  {'link': 'edges', 'source': 'sourceId', 'target': 'targetId'})
+`;
+    this.pyodide.runPython(predefined);
     this.setBusy(null);
 
+  }
+
+  /**
+   * Returns the Python context which can be used in the code to get/set data.
+   */
+  getPythonContext() {
+    const randomRange = _.range(20).map(i => Math.round(Math.random() * 100));
+    return {
+      graph: null,
+      chart: {
+        series: [{
+          name: "Random Data",
+          data: randomRange
+        }],
+        options: {
+          chart: {
+            height: "100%",
+            width: "100%",
+            type: "bar"
+          },
+          xaxis: {
+            type: "numeric"
+          },
+          title: {
+            text: "Test Widget"
+          },
+          theme: {
+            palette: "palette6" // upto palette10
+          }
+        }
+      }
+    };
   }
 
 }

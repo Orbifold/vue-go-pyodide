@@ -1,0 +1,29 @@
+[
+  {
+    "typeName": "Widget",
+    "text": "Graph 1",
+    "data": null,
+    "id": "graph1",
+    "description": "Basic script showing how to output a graph.",
+    "visualization": "graph",
+    "code": "import networkx as nx\nimport ctx\n\ng = nx.watts_strogatz_graph(50, 4, .42)\nctx.graph = serialize_graph(g)"
+  },
+  {
+    "typeName": "Widget",
+    "text": "Graph 2",
+    "data": null,
+    "id": "graph2",
+    "visualization": "graph",
+    "description": "Another one",
+    "code": "import ctx"
+  },
+  {
+    "typeName": "Widget",
+    "text": "Bar Chart",
+    "data": null,
+    "id": "barchart",
+    "visualization": "barchart",
+    "description": "",
+    "code": "import ctx\nctx.chart.series = [\n  {\n    \"name\":\"a\",\n    \"data\":[1,2,3,4,5,6]\n  }\n]"
+  }
+]

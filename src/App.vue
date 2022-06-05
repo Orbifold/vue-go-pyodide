@@ -16,24 +16,24 @@
       <v-container>
         <v-row>
           <v-col cols="10">
-            <PythonEditorComponent :code="code" ref="py"/>
+            <PythonEditorComponent :code="code" ref="py" @output-changed="onPythonOutput" @python-ready="onPythonReady"/>
             <div class="log-box" v-html="log" v-if="log && log.trim().length>0"></div>
             <div class="error-box" v-html="error" v-if="error && error.trim().length>0"></div>
             <v-divider></v-divider>
             <div class="mt-2">
               <DiagramComponent v-if="selectedVisualization==='graph'" :graphModel="graphModel"></DiagramComponent>
-              <ChartComponent v-else :data="chartData" :options="chartOptions"></ChartComponent>
+              <ChartComponent v-else :series="chartSeries" :options="chartOptions"></ChartComponent>
             </div>
           </v-col>
           <v-col cols="2" style="border-left: 1px solid silver;">
-            <v-btn depressed color="success" style="width:100%" title="Use CTRL+Enter to execute the script" @click="execute">Execute</v-btn>
+            <v-btn depressed color="success" style="width:100%" title="Use CTRL+Enter to execute the script" @click="execute(null)">Execute</v-btn>
             <div><p style="font-size: 10px; margin: 5px 0">Use CTRL+Enter to execute the script.</p></div>
             <v-divider class="mb-3 mt-3"></v-divider>
             <h3>Settings</h3>
             <v-select class="my-4" :items="chartTypes" v-model="selectedVisualization" dense label="Visualization" outlined></v-select>
             <v-divider class="my-1"></v-divider>
             <h3>Examples</h3>
-            <v-select :items="examples" v-model="selectedExample" dense outlined class="my-4"></v-select>
+            <v-select :items="presetList" item-value="id" item-text="text" v-model="selectedWidgetId" dense outlined class="my-4"></v-select>
             <div><p>{{ exampleDescription }}</p></div>
           </v-col>
         </v-row>
@@ -49,6 +49,8 @@ import DiagramComponent from "@/components/DiagramComponent.vue";
 import {Component, Prop, Vue, Watch} from "vue-property-decorator";
 import ChartComponent from "@/components/ChartComponent.vue";
 import * as _ from "lodash";
+import LocalStore, {Widget} from "@/localStore";
+import presets from "@/assets/presets.json";
 
 @Component({
   components: {
@@ -59,42 +61,16 @@ import * as _ from "lodash";
 })
 export default class App extends Vue {
   code: string = null;
-  chartData: any = null;
-  chartOptions: any = null;
 
-  selectedExample: string = "graph1";
+  localStore: LocalStore = null;
+  selectedWidgetId: string = "graph1";
   exampleDescription: string = null;
   chartTypes: any[] = [
     {text: "Bar Chart", value: "barchart"},
     {text: "Graph", value: "graph"}
   ];
-  examples: any[] = [
-    {
-      text: "Graph 1",
-      value: "graph1",
-      description: "Basic script showing how to output a graph.",
-      visualization: "graph",
-      code: `import networkx as nx
-import ctx
 
-g = nx.watts_strogatz_graph(50, 4, .42)
-ctx.graph = serialize_graph(g)`
-    },
-    {
-      text: "Graph 2",
-      value: "graph2",
-      visualization: "graph",
-      description: "Another one",
-      code: `import ctx`
-    },
-    {
-      text: "Bar Chart",
-      value: "barchart",
-      visualization: "barchart",
-      description: "",
-      code: ``
-    }
-  ];
+  presetList: any[] = [];
 
   get selectedVisualization() {
     return this.$store.state.visualization;
@@ -112,6 +88,14 @@ ctx.graph = serialize_graph(g)`
     return this.$store.state.busyMessage;
   }
 
+  /**
+   * Returns the current widgetId.
+   * @returns {null}
+   */
+  get widgetId() {
+    return this.$store.state.widgetId;
+  }
+
   @Watch("selectedChart")
   onChartChanged() {
 
@@ -119,6 +103,14 @@ ctx.graph = serialize_graph(g)`
 
   get graphModel() {
     return this.$store.state.graphModel;
+  }
+
+  get chartSeries() {
+    return this.$store.state.chartSeries;
+  }
+
+  get chartOptions() {
+    return this.$store.state.chartOptions;
   }
 
   get log() {
@@ -129,47 +121,100 @@ ctx.graph = serialize_graph(g)`
     return this.$store.state.error;
   }
 
-  @Watch("selectedExample")
-  onExampleChanged() {
-    const found = _.find(this.examples, e => e.value === this.selectedExample);
-    if (!found) {
-      return alert("The example was not found.");
+  @Watch("selectedWidgetId")
+  onWidgetChanged() {
+    this.$store.commit("setWidgetIt", this.selectedWidgetId);
+    const widget = this.localStore.getItemById(this.selectedWidgetId);
+    if (!widget) {
+      return alert("The widget was not found.");
     }
-    this.exampleDescription = found.description;
-    this.selectedVisualization = found.visualization;
-    this.code = found.code;
+    this.exampleDescription = widget.description;
+    this.selectedVisualization = widget.visualization;
+    this.code = widget.code;
+    this.updateVisualization();
   }
 
-  execute() {
-    (this.$refs.py as any).execute();
+  updatePresetList() {
+    this.presetList = presets.map(p => ({text: p.text, id: p.id}));
   }
 
-  mounted() {
-    this.onExampleChanged();
-    this.chartData = [
-      {
-        name: "Sample",
-        data: [1, 3, 12, 4, 2, 3, 1, 4, 15]
+  async updateVisualization() {
+    this.$store.commit("clearVisualizationData");
+    const widget = this.localStore.getItemById(this.selectedWidgetId);
+    if (_.isNil(widget.data)) {
+      this.execute(widget.code);
+    } else {
+      switch (widget.visualization) {
+        case "graph":
+          this.$store.commit("setGraphModel", widget.data);
+          break;
+        case "barchart":
+          this.$store.commit("setChartModel", widget.data);
       }
-    ];
-    this.chartOptions = {
-      chart: {
-        height: "100%",
-        width: "100%",
-        type: "bar"
-      },
-      xaxis: {
-        type: "numeric"
-      },
-      title: {
-        text: "Test Widget"
-      },
-      theme: {
-        palette: "palette6" // upto palette10
-      }
-    };
+    }
   }
 
+  execute(code = null) {
+    return (this.$refs.py as any).execute(code);
+  }
+
+  async initLocalStore() {
+    this.localStore = new LocalStore();
+    await this.localStore.init();
+  }
+
+  async pythonReady() {
+    if (this.$store.state.pythonReady) {
+      return;
+    }
+    while (!this.$store.state.pythonReady) {
+      await new Promise(r => setTimeout(r, 300));
+    }
+    return;
+  }
+
+  async mounted() {
+
+    await this.initLocalStore();
+    await this.ensurePresetsInLocalStore();
+    this.updatePresetList();
+    await this.pythonReady();
+    this.onWidgetChanged();
+  }
+
+  onPythonOutput(ctx) {
+    if (!_.isNil(ctx)) {
+      const widget = this.localStore.getItemById(this.selectedWidgetId);
+      switch (widget.visualization) {
+        case "graph":
+          widget.data = ctx.graph;
+          break;
+        case "barchart":
+          widget.data = ctx.chart;
+          break;
+
+      }
+      widget.code = this.code;
+      this.localStore.upsertItem(widget);
+      this.updateVisualization();
+    }
+  }
+
+  onPythonReady() {
+    this.$store.commit("setPythonReady");
+  }
+
+  /**
+   * Ensures that all the presets are in the local store.
+   * @returns {Promise<void>}
+   */
+  async ensurePresetsInLocalStore() {
+    for (const preset of presets) {
+      if (!this.localStore.idExists(preset.id)) {
+        this.localStore.addItem(_.clone(preset));
+      }
+    }
+  }
 }
 </script>
 

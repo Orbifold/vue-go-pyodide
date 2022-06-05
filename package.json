@@ -21,7 +21,8 @@
     "prismjs": "^1.27.0",
     "apexcharts": "^3.35.0",
     "lokijs": "^1.5.12",
-    "vue-apexcharts": "^1.6.2"
+    "vue-apexcharts": "^1.6.2",
+    "@faker-js/faker": "^6.3.1"
   },
   "devDependencies": {
     "@types/jest": "^24.0.19",
@@ -42,6 +43,6 @@
     "> 1%",
     "last 2 versions",
     "not dead"
-  ],
+  ]
 
 }
