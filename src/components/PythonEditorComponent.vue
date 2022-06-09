@@ -15,6 +15,7 @@ import "prismjs/components/prism-clike.min";
 import "prismjs/components/prism-python.min";
 import "prismjs/themes/prism-coy.min.css";
 import VueBase from "@/components/VueBase";
+import {PyProxy, PyProxyDict} from "../../public/pyodide/pyodide";
 
 /*
 * Errors and log:
@@ -105,7 +106,6 @@ export default class PythonEditorComponent extends VueBase {
     this.setBusy("Executing Python");
     console.log("Executing Python");
     this.resetOutput();
-    // this.ctx = this.getPythonContext();
     try {
       const out = this.pyodide.runPython(code);
       // const x = this.pyodide.globals.get("x");
@@ -127,14 +127,8 @@ export default class PythonEditorComponent extends VueBase {
         });
         graph = {nodes, edges};
       }
-      // todo: need a recursive serialization
-      const serializedContext = {
-        chart: {
-          options: this.ctx.chart.options,
-          series: this.ctx.chart.series.toJs().map(u => Object.fromEntries(u))
-        },
-        graph
-      };
+
+      const serializedContext = this.serializeContext(this.ctx);
       this.$emit("output-changed", serializedContext);
       return serializedContext;
     } catch (e) {
@@ -143,6 +137,47 @@ export default class PythonEditorComponent extends VueBase {
       this.setBusy(null);
     }
 
+  }
+
+  /**
+   * Getting rid of the Pyodide Proxy
+   * @param obj Something coming out of the Pyodide context.
+   */
+  serializeContext(obj) {
+
+    if (obj instanceof Object) {
+      if (obj instanceof Map) {
+        const a = Array.from(obj);
+        // return a.map(u => this.serializeContext(u));
+        const d = {};
+        for(let u of a){
+          d[u[0]] = this.serializeContext(u[1])
+        }
+        return d
+      } else if (obj instanceof Array) {
+        return obj.map(u => this.serializeContext(u));
+      } else if (obj.constructor.name === "PyProxyClass") {
+        const ojs = obj.toJs();
+        if (ojs instanceof Map) {
+          const ajs = Array.from(ojs);
+          const d = {};
+          for (let u of ajs) {
+            d[u[0]] = this.serializeContext(u[1]);
+          }
+          return d;
+        } else {
+          return this.serializeContext(ojs);
+        }
+      } else {
+        const d = {};
+        for (let e in obj) {
+          d[e] = this.serializeContext(obj[e]);
+        }
+        return d;
+      }
+    } else {
+      return obj;
+    }
   }
 
   /**
