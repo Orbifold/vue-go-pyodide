@@ -94,4 +94,9 @@ export default class LocalStore {
     idExists(id){
         return !_.isNil(this.getItemById(id))
     }
+
+    getWidgetList(){
+        const coll = this.getOrCreateCollection(WidgetCollectionName);
+        return coll.find({}).map(u=>({text:u.text,id:u.id}));
+    }
 }

@@ -15,7 +15,6 @@ import "prismjs/components/prism-clike.min";
 import "prismjs/components/prism-python.min";
 import "prismjs/themes/prism-coy.min.css";
 import VueBase from "@/components/VueBase";
-import {PyProxy, PyProxyDict} from "../../public/pyodide/pyodide";
 
 /*
 * Errors and log:
@@ -63,19 +62,20 @@ export default class PythonEditorComponent extends VueBase {
       this.pyodide = await loadPyodide({
         stdin: null,
         stdout: (msg) => {
+          // this redirects things like print to our logging
           this.appendToLog(msg);
         }, stderr: (e) => {
+          // same with errors, we send it to our error output
           this.appendToError(e.message);
         }
       });
-      // await pyodide.loadPackage("numpy",(e)=>console.log(e),(e)=>console.error(e));
-      // await this.pyodide.loadPackage("micropip", (e) =>{this.busyMessage = e}, (e) => console.error(e));
-      await this.pyodide.loadPackage("faker", (msg) => {
-        this.setBusy(msg);
-      }, (e) => this.appendToError(e));
-      await this.pyodide.loadPackage("networkx", (msg) => {
-        this.setBusy(msg);
-      }, (e) => this.appendToError(e));
+      // note that you can add packages to Pyodide but make sure that the package.json in the Pyodide directory knows about it
+      const preloadedPackages = ["faker", "networkx"];
+      for (const name of preloadedPackages) {
+        await this.pyodide.loadPackage(name, (msg) => {
+          this.setBusy(msg);
+        }, (e) => this.appendToError(e));
+      }
       // clear the log and error output
       this.resetOutput();
       this.$emit("python-ready");
@@ -104,39 +104,24 @@ export default class PythonEditorComponent extends VueBase {
       return null;
     }
     this.setBusy("Executing Python");
-    console.log("Executing Python");
+
     this.resetOutput();
     try {
       const out = this.pyodide.runPython(code);
+      // the globals set can be accessed but the user really should use the ctx instead
       // const x = this.pyodide.globals.get("x");
       // if (x) {
       //   console.log("x: ", x);
       // }
-      let graph = null;
-      if (this.ctx.graph) {
-        let nodes = JSON.parse(this.ctx.graph.get("nodes").toString().replaceAll("'", "\""));
-        //@ts-ignore
-        let edges = JSON.parse(this.ctx.graph.get("edges").toString().replaceAll("'", "\""));
-        nodes = nodes.map(n => {
-          n.name = n.id;
-          return n;
-        });
-        edges = edges.map(e => {
-          e.name = Math.random() > 0.5 ? "A" : null;
-          return e;
-        });
-        graph = {nodes, edges};
-      }
 
       const serializedContext = this.serializeContext(this.ctx);
-      this.$emit("output-changed", serializedContext);
+      this.$emit("output-changed", {ctx: serializedContext, code: this.snippet});
       return serializedContext;
     } catch (e) {
       this.appendToError(e);
     } finally {
       this.setBusy(null);
     }
-
   }
 
   /**
@@ -144,16 +129,15 @@ export default class PythonEditorComponent extends VueBase {
    * @param obj Something coming out of the Pyodide context.
    */
   serializeContext(obj) {
-
     if (obj instanceof Object) {
       if (obj instanceof Map) {
         const a = Array.from(obj);
         // return a.map(u => this.serializeContext(u));
         const d = {};
-        for(let u of a){
-          d[u[0]] = this.serializeContext(u[1])
+        for (let u of a) {
+          d[u[0]] = this.serializeContext(u[1]);
         }
-        return d
+        return d;
       } else if (obj instanceof Array) {
         return obj.map(u => this.serializeContext(u));
       } else if (obj.constructor.name === "PyProxyClass") {
@@ -286,19 +270,19 @@ function loadScript(src) {
  * @param src
  * @returns {Promise<unknown>}
  */
-function unloadScript(src) {
-  return new Promise(function (resolve, reject) {
-    const el = document.querySelector("script[src=\"" + src + "\"]");
-
-    if (!el) {
-      reject();
-      return;
-    }
-
-    document.head.removeChild(el);
-
-    resolve(null);
-  });
-}
+// function unloadScript(src) {
+//   return new Promise(function (resolve, reject) {
+//     const el = document.querySelector("script[src=\"" + src + "\"]");
+//
+//     if (!el) {
+//       reject();
+//       return;
+//     }
+//
+//     document.head.removeChild(el);
+//
+//     resolve(null);
+//   });
+// }
 
 </script>

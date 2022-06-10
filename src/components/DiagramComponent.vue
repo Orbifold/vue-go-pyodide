@@ -128,7 +128,7 @@ export default class DiagramView extends Vue {
       nodeDataArray: nodeData,
       linkDataArray: linkData
     });
-    console.log("nodes: ", nodeData.length, "edges: ", linkData.length);
+    // console.log("nodes: ", nodeData.length, "edges: ", linkData.length);
     window["model"] = this.diagram.model;
   }
 

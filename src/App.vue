@@ -26,15 +26,22 @@
             </div>
           </v-col>
           <v-col cols="2" style="border-left: 1px solid silver;">
+
             <v-btn depressed color="success" style="width:100%" title="Use CTRL+Enter to execute the script" @click="execute(null)">Execute</v-btn>
             <div><p style="font-size: 10px; margin: 5px 0">Use CTRL+Enter to execute the script.</p></div>
-            <v-divider class="mb-3 mt-3"></v-divider>
-            <h3>Settings</h3>
-            <v-select class="my-4" :items="chartTypes" v-model="selectedVisualization" dense label="Visualization" outlined></v-select>
             <v-divider class="my-1"></v-divider>
-            <h3>Examples</h3>
+            <h3>Snippets</h3>
             <v-select :items="presetList" item-value="id" item-text="text" v-model="selectedWidgetId" dense outlined class="my-4"></v-select>
-            <div><p>{{ exampleDescription }}</p></div>
+            <v-btn depressed color="success" style="width:100%" title="Adds a new snippet" @click="addSnippet()">New Snippet</v-btn>
+            <v-btn depressed color="warning" class="mt-1" style="width:100%" title="Reloads the predefined snippets" @click="resetSnippets()">Reset Snippets</v-btn>
+            <v-divider class="mb-3 mt-3"></v-divider>
+            <h3>Properties</h3>
+            <v-select class="my-4" :items="chartTypes" v-model="selectedVisualization" dense label="Visualization Type" outlined></v-select>
+            <v-text-field v-model="snippetName" dense outlined label="Snippet Name"></v-text-field>
+            <v-textarea v-model="snippetDescription" label="Snippet Description" outlined auto-grow></v-textarea>
+            <v-btn depressed color="success" style="width:100%" title="Saves the widget" @click="saveWidget()">Save</v-btn>
+            <v-divider class="my-1"></v-divider>
+
           </v-col>
         </v-row>
       </v-container>
@@ -51,6 +58,7 @@ import ChartComponent from "@/components/ChartComponent.vue";
 import * as _ from "lodash";
 import LocalStore, {Widget} from "@/localStore";
 import presets from "@/assets/presets.json";
+import Utils from "@/utils";
 
 @Component({
   components: {
@@ -65,6 +73,8 @@ export default class App extends Vue {
   localStore: LocalStore = null;
   selectedWidgetId: string = "graph1";
   exampleDescription: string = null;
+  snippetName: string = null;
+  snippetDescription: string = null;
   chartTypes: any[] = [
     {text: "Bar Chart", value: "barchart"},
     {text: "Graph", value: "graph"}
@@ -131,11 +141,14 @@ export default class App extends Vue {
     this.exampleDescription = widget.description;
     this.selectedVisualization = widget.visualization;
     this.code = widget.code;
+    this.snippetName = widget.text;
+    this.snippetDescription = widget.description;
     this.updateVisualization();
   }
 
   updatePresetList() {
-    this.presetList = presets.map(p => ({text: p.text, id: p.id}));
+    this.presetList = this.localStore.getWidgetList();
+    console.log(this.presetList.map(u => u.text));
   }
 
   async updateVisualization() {
@@ -173,16 +186,27 @@ export default class App extends Vue {
     return;
   }
 
-  async mounted() {
-
-    await this.initLocalStore();
-    await this.ensurePresetsInLocalStore();
+  addSnippet() {
+    const w = {
+      id: Utils.id(),
+      text: "New Snippet",
+      description: "",
+      visualization: "graph",
+      code: "import networkx as nx\nimport ctx\n\ng = nx. balanced_tree(5, 3)\nctx.graph = serialize_graph(g)",
+      data: null
+    };
+    this.localStore.addItem(w);
     this.updatePresetList();
-    await this.pythonReady();
-    this.onWidgetChanged();
+    this.selectedWidgetId = w.id;
+
   }
 
-  onPythonOutput(ctx) {
+  async mounted() {
+    await this.reset();
+  }
+
+  onPythonOutput(obj) {
+    const {ctx, code} = obj;
     if (!_.isNil(ctx)) {
       const widget = this.localStore.getItemById(this.selectedWidgetId);
       switch (widget.visualization) {
@@ -194,14 +218,40 @@ export default class App extends Vue {
           break;
 
       }
-      widget.code = this.code;
+      widget.code = code;
+      this.code = code;
+      console.log(widget.code);
       this.localStore.upsertItem(widget);
+
       this.updateVisualization();
     }
   }
 
+  saveWidget() {
+    const widget = this.localStore.getItemById(this.selectedWidgetId);
+    widget.visualization = this.selectedVisualization;
+    widget.code = this.code;
+    widget.text = this.snippetName;
+    widget.description = this.snippetDescription;
+    this.localStore.upsertItem(widget);
+    this.updatePresetList();
+  }
+
   onPythonReady() {
     this.$store.commit("setPythonReady");
+  }
+
+  async resetSnippets() {
+    localStorage.clear();
+    await this.reset();
+  }
+
+  async reset() {
+    await this.initLocalStore();
+    await this.ensurePresetsInLocalStore();
+    this.updatePresetList();
+    await this.pythonReady();
+    this.onWidgetChanged();
   }
 
   /**
